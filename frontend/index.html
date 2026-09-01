@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vasooli AI — Revenue Recovery Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --ink:#0E1015;
+    --surface:#161922;
+    --surface-2:#1D212C;
+    --line:#2B2F3A;
+    --text:#ECE8DE;
+    --muted:#8D93A3;
+    --gold:#C79A4B;
+    --gold-dim:#8A6E3A;
+    --sage:#7CA98C;
+    --rust:#B5674C;
+    --slate:#7C8FB0;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 500px at 15% -10%, rgba(199,154,75,0.08), transparent 60%),
+      var(--ink);
+    color:var(--text);
+    font-family:'IBM Plex Sans', sans-serif;
+    line-height:1.5;
+  }
+  .serif{ font-family:'Newsreader', serif; }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+
+  header{
+    border-bottom:1px solid var(--line);
+    padding:28px 40px 24px;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:16px;
+  }
+  header .brand h1{
+    font-size:2.1rem;
+    font-weight:500;
+    margin:0;
+    letter-spacing:0.2px;
+  }
+  header .brand h1 em{
+    font-style:italic;
+    color:var(--gold);
+  }
+  header .brand p{
+    margin:6px 0 0;
+    color:var(--muted);
+    font-size:0.95rem;
+    max-width:560px;
+  }
+  .mode-row{ display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+  .pill{
+    font-size:0.72rem;
+    padding:3px 9px;
+    border-radius:3px;
+    border:1px solid var(--line);
+    color:var(--muted);
+  }
+  .pill.on{ color:var(--sage); border-color:rgba(124,169,140,0.4); }
+  .pill.off{ color:var(--muted); }
+
+  .actions{ display:flex; gap:10px; align-items:center; }
+  button{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:0.88rem;
+    font-weight:500;
+    padding:10px 16px;
+    border-radius:4px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--text);
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  button:hover{ border-color:var(--gold-dim); background:var(--surface-2); }
+  button.primary{
+    background:var(--gold);
+    border-color:var(--gold);
+    color:#1A1305;
+  }
+  button.primary:hover{ background:#D6A85A; }
+  button:disabled{ opacity:0.45; cursor:default; }
+
+  main{ padding:32px 40px 60px; max-width:1320px; margin:0 auto; }
+
+  /* --- Ledger strip (hero numbers) --- */
+  .ledger{
+    display:flex;
+    border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+    margin-bottom:36px;
+  }
+  .ledger .col{
+    flex:1;
+    padding:20px 26px;
+    border-right:1px solid var(--line);
+  }
+  .ledger .col:last-child{ border-right:none; }
+  .ledger .label{
+    font-size:0.78rem;
+    color:var(--muted);
+    margin-bottom:8px;
+  }
+  .ledger .value{
+    font-family:'Newsreader', serif;
+    font-size:2.1rem;
+    font-weight:500;
+  }
+  .ledger .value.gold{ color:var(--gold); }
+  .ledger .value.sage{ color:var(--sage); }
+  .ledger .sub{ font-size:0.78rem; color:var(--muted); margin-top:4px; }
+
+  /* --- Funnel --- */
+  section{ margin-bottom:40px; }
+  section > h2{
+    font-family:'Newsreader', serif;
+    font-weight:500;
+    font-size:1.3rem;
+    margin:0 0 4px;
+  }
+  section > p.section-sub{
+    color:var(--muted);
+    font-size:0.88rem;
+    margin:0 0 18px;
+  }
+  .funnel-row{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin-bottom:10px;
+  }
+  .funnel-row .stage-label{
+    width:170px;
+    flex-shrink:0;
+    font-size:0.85rem;
+    color:var(--muted);
+    text-align:right;
+  }
+  .funnel-row .bar-track{
+    flex:1;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:3px;
+    height:26px;
+    position:relative;
+    overflow:hidden;
+  }
+  .funnel-row .bar-fill{
+    height:100%;
+    border-radius:2px;
+    transition:width .5s ease;
+  }
+  .funnel-row .count{
+    width:56px;
+    flex-shrink:0;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.85rem;
+    color:var(--text);
+  }
+
+  /* --- Two column: transactions + audit log --- */
+  .two-col{
+    display:grid;
+    grid-template-columns:1.1fr 1fr;
+    gap:28px;
+  }
+  @media (max-width:980px){ .two-col{ grid-template-columns:1fr; } }
+
+  .panel{
+    border:1px solid var(--line);
+    border-radius:6px;
+    background:var(--surface);
+    overflow:hidden;
+  }
+  .panel-head{
+    padding:14px 18px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .panel-head h3{
+    margin:0;
+    font-size:1rem;
+    font-weight:600;
+  }
+  .panel-body{ max-height:560px; overflow-y:auto; }
+
+  table{ width:100%; border-collapse:collapse; font-size:0.83rem; }
+  th{
+    text-align:left;
+    padding:9px 14px;
+    color:var(--muted);
+    font-weight:500;
+    font-size:0.74rem;
+    border-bottom:1px solid var(--line);
+    position:sticky; top:0; background:var(--surface);
+  }
+  td{
+    padding:9px 14px;
+    border-bottom:1px solid var(--line);
+    vertical-align:top;
+  }
+  tr:last-child td{ border-bottom:none; }
+  .amt{ font-family:'IBM Plex Mono', monospace; }
+  .status-tag{
+    font-size:0.72rem;
+    padding:2px 7px;
+    border-radius:3px;
+    border:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .status-recovered{ color:var(--sage); border-color:rgba(124,169,140,0.4); }
+  .status-payment_verified{ color:var(--sage); border-color:rgba(124,169,140,0.4); }
+  .status-awaiting_payment, .status-action_created{ color:var(--gold); border-color:rgba(199,154,75,0.35); }
+  .status-expired, .status-failed{ color:var(--rust); border-color:rgba(181,103,76,0.4); }
+  .status-lost{ color:var(--rust); border-color:rgba(181,103,76,0.4); }
+  .status-escalated{ color:var(--slate); border-color:rgba(124,143,176,0.4); }
+  .status-stopped{ color:var(--muted); }
+  .status-at_risk, .status-diagnosed, .status-contacted{ color:var(--gold); border-color:rgba(199,154,75,0.35); }
+
+  .log-entry{
+    padding:12px 18px;
+    border-bottom:1px solid var(--line);
+    font-size:0.83rem;
+  }
+  .log-entry:last-child{ border-bottom:none; }
+  .log-entry .top-row{
+    display:flex;
+    justify-content:space-between;
+    margin-bottom:5px;
+  }
+  .log-entry .stage-tag{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:0.7rem;
+    color:var(--gold);
+  }
+  .log-entry .ts{ color:var(--muted); font-size:0.72rem; }
+  .log-entry .reasoning{ color:#CFCBBF; }
+  .log-entry .src{ color:var(--muted); font-size:0.7rem; margin-top:4px; }
+
+  .empty{
+    padding:40px 18px;
+    text-align:center;
+    color:var(--muted);
+    font-size:0.88rem;
+  }
+  footer{
+    padding:24px 40px 40px;
+    color:var(--muted);
+    font-size:0.8rem;
+    max-width:1320px;
+    margin:0 auto;
+    border-top:1px solid var(--line);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1 class="serif">Vasooli <em>AI</em></h1>
+    <p>A bounded recovery agent for failed payments and abandoned checkouts — diagnoses the root cause, picks one compliant action, and logs every decision.</p>
+    <div class="mode-row">
+      <span id="pill-razorpay" class="pill off">Razorpay: checking…</span>
+      <span id="pill-webhook" class="pill off">Webhook: checking…</span>
+      <span id="pill-llm" class="pill off">Claude reasoning: checking…</span>
+    </div>
+  </div>
+  <div class="actions">
+    <button id="btn-reset">Reset</button>
+    <button id="btn-generate">Generate batch</button>
+    <button id="btn-run" class="primary">Run recovery agent</button>
+  </div>
+</header>
+
+<main>
+
+  <div class="ledger">
+    <div class="col">
+      <div class="label">Total at risk</div>
+      <div class="value" id="m-at-risk">₹0</div>
+      <div class="sub" id="m-count">0 transactions</div>
+    </div>
+    <div class="col">
+      <div class="label">Verified recovered</div>
+      <div class="value sage" id="m-recovered">₹0</div>
+      <div class="sub" id="m-recovered-count">0 transactions</div>
+    </div>
+    <div class="col">
+      <div class="label">Verified recovery rate</div>
+      <div class="value gold" id="m-rate">0%</div>
+      <div class="sub">signed Razorpay events only</div>
+    </div>
+    <div class="col">
+      <div class="label">Still in flight</div>
+      <div class="value" id="m-inflight">0</div>
+      <div class="sub">awaiting next agent pass</div>
+    </div>
+  </div>
+
+  <section>
+    <h2 class="serif">Recovery funnel</h2>
+    <p class="section-sub">No simulated outcome is counted as recovery. Payment is verified only from a valid, deduplicated Razorpay webhook.</p>
+    <div id="funnel"></div>
+  </section>
+
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Transactions</h3>
+        <span class="pill" id="txn-count-pill">0</span>
+      </div>
+      <div class="panel-body">
+        <table id="txn-table">
+          <thead>
+            <tr><th>Customer</th><th>Amount</th><th>Cause</th><th>Status</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="empty" id="txn-empty">No transactions yet — generate a batch to begin.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Agent audit trail</h3>
+        <span class="pill" id="log-count-pill">0</span>
+      </div>
+      <div class="panel-body" id="log-body">
+        <div class="empty" id="log-empty">No decisions logged yet.</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  Mock links and messages are clearly unverified and never contribute to recovered revenue. Signed webhook events are deduplicated with <span class="mono">x-razorpay-event-id</span>. Stopping rules: opt-out, scheduled quiet hours, retry and contact limits.
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const inr = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', {maximumFractionDigits:0});
+
+const STAGE_ORDER = [
+  ['at_risk', 'At risk', 'var(--gold-dim)'],
+  ['action_created', 'Action created', 'var(--slate)'],
+  ['awaiting_payment', 'Awaiting payment', 'var(--gold)'],
+  ['payment_verified', 'Payment verified', 'var(--sage)'],
+  ['expired', 'Expired', 'var(--rust)'],
+  ['failed', 'Failed', 'var(--rust)'],
+  ['escalated', 'Escalated', 'var(--slate)'],
+  ['stopped_compliance', 'Stopped (compliance)', 'var(--muted)'],
+];
+
+async function refreshHealth(){
+  const r = await fetch('/api/health').then(r=>r.json());
+  const rp = $('pill-razorpay'), wp = $('pill-webhook'), lp = $('pill-llm');
+  rp.textContent = 'Razorpay: ' + (r.razorpay_live ? 'live test-mode' : 'simulated links');
+  rp.className = 'pill ' + (r.razorpay_live ? 'on' : 'off');
+  wp.textContent = 'Webhook: ' + (r.webhook_ready ? 'signature verification ready' : 'secret missing');
+  wp.className = 'pill ' + (r.webhook_ready ? 'on' : 'off');
+  lp.textContent = 'Claude reasoning: ' + (r.llm_live ? 'live' : 'rule-based fallback');
+  lp.className = 'pill ' + (r.llm_live ? 'on' : 'off');
+}
+
+async function refreshMetrics(){
+  const m = await fetch('/api/metrics').then(r=>r.json());
+  $('m-at-risk').textContent = inr(m.total_at_risk_amount);
+  $('m-count').textContent = m.total_transactions + ' transactions';
+  $('m-recovered').textContent = inr(m.verified_recovered_amount);
+  $('m-recovered-count').textContent = m.verified_recovered_count + ' transactions';
+  $('m-rate').textContent = m.verified_recovery_rate_pct + '%';
+  $('m-inflight').textContent = m.funnel.still_in_flight;
+
+  const max = Math.max(1, ...STAGE_ORDER.map(([k]) => m.funnel[k] || 0));
+  const funnelEl = $('funnel');
+  funnelEl.innerHTML = '';
+  STAGE_ORDER.forEach(([key, label, color]) => {
+    const val = m.funnel[key] || 0;
+    const pct = Math.max(2, (val / max) * 100);
+    const row = document.createElement('div');
+    row.className = 'funnel-row';
+    row.innerHTML = `
+      <div class="stage-label">${label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:${color}"></div></div>
+      <div class="count">${val}</div>
+    `;
+    funnelEl.appendChild(row);
+  });
+}
+
+function statusClass(s){ return 'status-' + s; }
+
+async function refreshTransactions(){
+  const txns = await fetch('/api/transactions').then(r=>r.json());
+  const tbody = document.querySelector('#txn-table tbody');
+  tbody.innerHTML = '';
+  $('txn-count-pill').textContent = txns.length;
+  $('txn-empty').style.display = txns.length ? 'none' : 'block';
+  txns.slice(0, 200).forEach(t => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${t.customer_name}<br><span style="color:var(--muted); font-size:0.74rem">${t.segment.replace('_',' ')}</span></td>
+      <td class="amt">${inr(t.amount)}</td>
+      <td>${t.root_cause ? t.root_cause.replace(/_/g,' ') : '—'}</td>
+      <td><span class="status-tag ${statusClass(t.status)}">${t.status.replace(/_/g,' ')}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function refreshLogs(){
+  const logs = await fetch('/api/audit-log?limit=300').then(r=>r.json());
+  const body = $('log-body');
+  $('log-count-pill').textContent = logs.length;
+  if(!logs.length){
+    body.innerHTML = '<div class="empty">No decisions logged yet.</div>';
+    return;
+  }
+  body.innerHTML = '';
+  logs.forEach(l => {
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    const time = l.timestamp ? new Date(l.timestamp).toLocaleTimeString() : '';
+    div.innerHTML = `
+      <div class="top-row">
+        <span class="stage-tag">${l.stage}${l.action_taken ? ' · ' + l.action_taken.replace(/_/g,' ') : ''}</span>
+        <span class="ts">${time}</span>
+      </div>
+      <div class="reasoning">${l.reasoning || ''}</div>
+      <div class="src">source: ${l.reasoning_source}${l.outcome ? ' · outcome: ' + l.outcome.replace(/_/g,' ') : ''}</div>
+    `;
+    body.appendChild(div);
+  });
+}
+
+async function refreshAll(){
+  await Promise.all([refreshMetrics(), refreshTransactions(), refreshLogs()]);
+}
+
+$('btn-generate').addEventListener('click', async () => {
+  $('btn-generate').disabled = true;
+  await fetch('/api/generate-batch?n=120', {method:'POST'});
+  await refreshAll();
+  $('btn-generate').disabled = false;
+});
+
+$('btn-run').addEventListener('click', async () => {
+  $('btn-run').disabled = true;
+  await fetch('/api/run-agent', {method:'POST'});
+  await refreshAll();
+  $('btn-run').disabled = false;
+});
+
+$('btn-reset').addEventListener('click', async () => {
+  await fetch('/api/reset', {method:'POST'});
+  await refreshAll();
+});
+
+refreshHealth();
+refreshAll();
+</script>
+
+</body>
+</html>
