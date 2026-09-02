@@ -265,6 +265,7 @@ def api_metrics(db: Session = Depends(get_db)):
         "mode": {
             "razorpay_live": settings.razorpay_live,
             "llm_live": settings.llm_live,
+            "llm_provider": settings.llm_provider,
             "webhook_ready": settings.webhook_ready,
         },
         "generated_at": datetime.utcnow().isoformat(),
@@ -278,6 +279,7 @@ def health():
         "razorpay_live": settings.razorpay_live,
         "webhook_ready": settings.webhook_ready,
         "llm_live": settings.llm_live,
+        "llm_provider": settings.llm_provider,
     }
 
 

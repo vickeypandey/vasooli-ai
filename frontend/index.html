@@ -459,7 +459,7 @@ async function refreshHealth(){
   rp.className = 'pill ' + (r.razorpay_live ? 'on' : 'off');
   wp.textContent = 'Webhook: ' + (r.webhook_ready ? 'signature verification ready' : 'secret missing');
   wp.className = 'pill ' + (r.webhook_ready ? 'on' : 'off');
-  lp.textContent = 'AI diagnosis: ' + (r.llm_live ? 'Claude live · policy gated' : 'typed deterministic fallback');
+  lp.textContent = 'AI diagnosis: ' + (r.llm_provider === 'gemini' ? 'Gemini live · policy gated' : 'typed deterministic fallback');
   lp.className = 'pill ' + (r.llm_live ? 'on' : 'off');
 }
 

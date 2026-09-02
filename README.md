@@ -96,7 +96,7 @@ Invoke-RestMethod -Method Post "http://localhost:8000/api/policy-lab/run?seed=42
 ## Bounded AI diagnosis and Chaos Lab (Day 3)
 
 Unstructured gateway logs are treated as untrusted diagnostic evidence. With
-`ANTHROPIC_API_KEY` configured, Claude must return a strict typed proposal:
+`GEMINI_API_KEY` configured, Gemini must return a strict typed proposal:
 
 ```json
 {
@@ -146,7 +146,7 @@ This view makes the trust boundary visible. `AI_PROPOSED` is advice,
 Synthetic at-risk input
         |
         v
-Structured diagnosis ---- Claude proposal or typed fallback
+Structured diagnosis ---- Gemini proposal or typed fallback
         |                              |
         +------------------------------+
                        |
@@ -198,6 +198,20 @@ https://YOUR-PUBLIC-HOST/api/webhooks/razorpay
 
 Razorpay cannot send webhooks directly to localhost. Deploy the app or use a
 Razorpay-supported public tunnel while testing.
+
+## Configure Gemini
+
+Create a Gemini API key in Google AI Studio and store it only as a server-side
+environment variable:
+
+```dotenv
+GEMINI_API_KEY=your_key
+GEMINI_MODEL=gemini-2.5-flash-lite
+```
+
+When the key is absent, unavailable or returns invalid output, Vasooli uses the
+typed deterministic fallback. The deterministic policy guard remains the only
+component allowed to authorize an action.
 
 ## Run
 

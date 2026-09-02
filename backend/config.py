@@ -8,7 +8,8 @@ class Settings:
     RAZORPAY_KEY_ID: str | None = os.getenv("RAZORPAY_KEY_ID") or None
     RAZORPAY_KEY_SECRET: str | None = os.getenv("RAZORPAY_KEY_SECRET") or None
     RAZORPAY_WEBHOOK_SECRET: str | None = os.getenv("RAZORPAY_WEBHOOK_SECRET") or None
-    ANTHROPIC_API_KEY: str | None = os.getenv("ANTHROPIC_API_KEY") or None
+    GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY") or None
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
 
     MAX_AUTO_RETRIES: int = int(os.getenv("MAX_AUTO_RETRIES", 3))
     MAX_CONTACT_ATTEMPTS: int = int(os.getenv("MAX_CONTACT_ATTEMPTS", 2))
@@ -24,7 +25,11 @@ class Settings:
 
     @property
     def llm_live(self) -> bool:
-        return bool(self.ANTHROPIC_API_KEY)
+        return bool(self.GEMINI_API_KEY)
+
+    @property
+    def llm_provider(self) -> str:
+        return "gemini" if self.llm_live else "deterministic_fallback"
 
     @property
     def webhook_ready(self) -> bool:
