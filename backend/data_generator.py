@@ -29,6 +29,16 @@ FAILURE_ERROR_CODES = {
     "ISSUER_DECLINED": 8,
 }
 
+GATEWAY_LOGS = {
+    "INSUFFICIENT_FUNDS": "issuer_response=declined balance_check=insufficient instrument=customer_account",
+    "BANK_SERVER_TIMEOUT": "issuer_host timed out after 3000ms; authorization result unknown; retryable=true",
+    "OTP_MISMATCH": "3ds authentication failed: otp mismatch or expired challenge",
+    "CARD_EXPIRED": "instrument validation failed: expiry date is in the past",
+    "NETWORK_ERROR": "client connection reset before gateway confirmation; no authorization received",
+    "GATEWAY_TIMEOUT": "psp gateway deadline exceeded; upstream status unavailable; retryable=true",
+    "ISSUER_DECLINED": "issuer returned do_not_honor; retryable=false; manual review recommended",
+}
+
 SEGMENTS = ["high_value", "regular", "new_customer"]
 SEGMENT_WEIGHTS = [15, 60, 25]
 
@@ -56,6 +66,7 @@ def generate_batch(n: int = 120, abandonment_ratio: float = 0.30) -> list[Transa
     for _ in range(n_failed):
         segment = _pick_weighted(dict(zip(SEGMENTS, SEGMENT_WEIGHTS)))
         lo, hi = AMOUNT_RANGES[segment]
+        error_code = _pick_weighted(FAILURE_ERROR_CODES)
         txn = Transaction(
             customer_id=fake.uuid4()[:8],
             customer_name=fake.name(),
@@ -63,7 +74,8 @@ def generate_batch(n: int = 120, abandonment_ratio: float = 0.30) -> list[Transa
             amount=round(random.uniform(lo, hi), 2),
             payment_method=random.choice(PAYMENT_METHODS),
             failure_type="payment_failed",
-            error_code=_pick_weighted(FAILURE_ERROR_CODES),
+            error_code=error_code,
+            gateway_log=GATEWAY_LOGS[error_code],
             simulated_hour=random.randint(0, 23),
             customer_opted_out=random.random() < 0.06,  # ~6% do-not-contact
             status="at_risk",
@@ -81,6 +93,7 @@ def generate_batch(n: int = 120, abandonment_ratio: float = 0.30) -> list[Transa
             payment_method=random.choice(PAYMENT_METHODS),
             failure_type="checkout_abandoned",
             error_code=None,
+            gateway_log="checkout_opened=true payment_attempted=false session_expired=true",
             simulated_hour=random.randint(0, 23),
             customer_opted_out=random.random() < 0.06,
             status="at_risk",

@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.agent import run_agent_on_batch
+from backend.chaos_lab import run_chaos_suite
 from backend.config import settings
 from backend.data_generator import generate_batch
 from backend.database import SessionLocal, get_db, init_db
@@ -41,6 +42,7 @@ def _txn_dict(t: Transaction) -> dict:
         "payment_method": t.payment_method,
         "failure_type": t.failure_type,
         "error_code": t.error_code,
+        "gateway_log": t.gateway_log,
         "root_cause": t.root_cause,
         "status": t.status,
         "retry_count": t.retry_count,
@@ -122,6 +124,11 @@ def api_webhook_events(limit: int = 100, db: Session = Depends(get_db)):
         "error": e.error,
         "received_at": e.received_at.isoformat() if e.received_at else None,
     } for e in events]
+
+
+@app.post("/api/chaos-lab/run")
+def api_run_chaos_lab():
+    return run_chaos_suite()
 
 
 @app.post("/api/policy-lab/run")

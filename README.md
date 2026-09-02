@@ -93,6 +93,39 @@ Run it from the dashboard or with:
 Invoke-RestMethod -Method Post "http://localhost:8000/api/policy-lab/run?seed=42&n=1000"
 ```
 
+## Bounded AI diagnosis and Chaos Lab (Day 3)
+
+Unstructured gateway logs are treated as untrusted diagnostic evidence. With
+`ANTHROPIC_API_KEY` configured, Claude must return a strict typed proposal:
+
+```json
+{
+  "root_cause": "card_expired",
+  "confidence": 0.98,
+  "evidence": ["instrument validation failed"],
+  "proposed_action": "payment_link",
+  "risk_flags": []
+}
+```
+
+The schema rejects prose, unknown fields, unknown actions and out-of-range
+confidence. API errors, timeouts and malformed model output fail closed to a
+typed deterministic diagnosis. The model cannot call executors.
+
+A separate deterministic policy guard checks opt-out status, contact budget,
+confidence threshold, prompt-injection flags, trusted structured error codes
+and the action allow-list. Every transaction records `AI_PROPOSED` followed by
+`POLICY_APPROVED`, `POLICY_OVERRIDDEN`, `POLICY_BLOCKED` or
+`POLICY_ABSTAINED` before `ACTION_CREATED` is possible.
+
+The dashboard Chaos Lab deliberately injects five failures: malformed output,
+unsafe retry, low confidence, customer opt-out and instructions hidden inside
+an untrusted gateway log. Run it from the dashboard or:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/api/chaos-lab/run"
+```
+
 ## Configure Razorpay test mode
 
 ```powershell
@@ -140,8 +173,11 @@ against a real Razorpay test Payment Link can produce `payment_verified`.
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/generate-batch?n=120` | Generate synthetic at-risk inputs |
+| `POST /api/generate-batch?n=12` | Generate synthetic at-risk inputs |
 | `POST /api/run-agent` | Process due, non-terminal transactions |
+| `POST /api/policy-lab/run?seed=42&n=1000` | Reproducible policy comparison |
+| `GET /api/policy-lab/latest` | Latest persisted policy experiment |
+| `POST /api/chaos-lab/run` | Inject five AI-boundary failures |
 | `POST /api/webhooks/razorpay` | Receive signed Razorpay events |
 | `GET /api/webhook-events` | Inspect verified event outcomes and exceptions |
 | `GET /api/metrics` | Verified KPIs plus isolated simulation values |

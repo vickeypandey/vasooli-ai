@@ -37,6 +37,7 @@ class Transaction(Base):
     payment_method = Column(String, nullable=False)  # upi | card | netbanking | wallet
     failure_type = Column(String, nullable=False)  # payment_failed | checkout_abandoned
     error_code = Column(String, nullable=True)  # null for checkout_abandoned
+    gateway_log = Column(Text, nullable=True)  # unstructured, untrusted diagnostic evidence
 
     simulated_hour = Column(Integer, nullable=False)  # 0-23, hour-of-day this event occurred
     customer_opted_out = Column(Boolean, default=False)  # do-not-contact list

@@ -26,6 +26,7 @@ def init_db():
         "razorpay_payment_id": "VARCHAR",
         "action_idempotency_key": "VARCHAR",
         "next_action_at": "DATETIME",
+        "gateway_log": "TEXT",
     }
     with engine.begin() as connection:
         for name, ddl in additions.items():

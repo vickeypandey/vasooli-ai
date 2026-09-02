@@ -17,11 +17,12 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
+from backend.ai_diagnosis import propose_diagnosis
 from backend.classifier import diagnose
 from backend.config import settings
 from backend.execution import create_payment_link, send_message
-from backend.llm import explain_decision
 from backend.models import AuditLog, Transaction
+from backend.policy_guard import authorize_proposal
 
 
 def _in_quiet_hours(hour: int) -> bool:
@@ -60,18 +61,12 @@ def _log(db: Session, txn: Transaction, stage: str, root_cause, action, reasonin
     db.add(entry)
 
 
-def _decide_action(diagnosis, txn: Transaction) -> str:
-    """Maps a diagnosis + transaction state to one bounded action."""
-    if diagnosis.root_cause == "checkout_abandonment":
-        return "discount_nudge"
-    if diagnosis.is_transient and txn.retry_count < settings.MAX_AUTO_RETRIES:
+def _execution_action(guard_action: str, txn: Transaction) -> str:
+    if guard_action == "retry":
         return "instant_retry" if txn.retry_count == 0 else "delayed_retry"
-    if diagnosis.root_cause in ("insufficient_funds", "otp_failure", "card_expired"):
-        return "payment_link"
-    if diagnosis.root_cause == "issuer_declined":
+    if guard_action == "human_escalation":
         return "escalate_to_human"
-    # transient but retries exhausted -> hand to a human-reviewable link instead
-    return "payment_link"
+    return guard_action
 
 
 def process_transaction(db: Session, txn: Transaction) -> None:
@@ -111,7 +106,30 @@ def process_transaction(db: Session, txn: Transaction) -> None:
         )
         return
 
-    action = _decide_action(diagnosis, txn)
+    proposal, proposal_source, fallback_reason = propose_diagnosis(
+        txn.failure_type, txn.error_code, txn.gateway_log
+    )
+    _log(
+        db, txn, "AI_PROPOSED", proposal.root_cause, proposal.proposed_action,
+        f"confidence={proposal.confidence:.2f}; evidence={proposal.evidence}; "
+        f"risk_flags={proposal.risk_flags}; fallback={fallback_reason or 'none'}",
+        proposal_source, "proposal_only_no_execution_authority",
+    )
+    guard = authorize_proposal(
+        proposal,
+        customer_opted_out=txn.customer_opted_out,
+        contact_count=txn.contact_count,
+        max_contacts=settings.MAX_CONTACT_ATTEMPTS,
+        trusted_root_cause=diagnosis.root_cause,
+    )
+    _log(
+        db, txn, f"POLICY_{guard.disposition.upper()}", diagnosis.root_cause,
+        guard.final_action, guard.reason, "deterministic_policy_guard", guard.disposition,
+    )
+    if guard.final_action == "no_action":
+        txn.status = "stopped"
+        return
+    action = _execution_action(guard.final_action, txn)
 
     # --- Compliance stop #3: quiet hours for anything contact-based ---
     contact_actions = {"payment_link", "discount_nudge"}
@@ -128,10 +146,8 @@ def process_transaction(db: Session, txn: Transaction) -> None:
         )
         return
 
-    reasoning, source = explain_decision(
-        diagnosis, action, txn.amount, txn.segment, txn.retry_count
-    )
-    _log(db, txn, "DECIDED", diagnosis.root_cause, action, reasoning, source, None)
+    _log(db, txn, "DECIDED", diagnosis.root_cause, action, guard.reason,
+         "deterministic_policy_guard", None)
 
     # --- Execute ---
     txn.last_action_at = now

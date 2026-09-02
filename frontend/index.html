@@ -178,6 +178,8 @@
   .lab-table .warn{ color:var(--rust); }
   .lab-foot{ padding:12px 18px; border-top:1px solid var(--line); color:var(--muted); font-size:.78rem; }
   .exception-list{ margin:8px 0 0; padding-left:18px; max-height:110px; overflow:auto; }
+  .chaos-pass{ color:var(--sage); }
+  .chaos-fail{ color:var(--rust); }
 
   /* --- Two column: transactions + audit log --- */
   .two-col{
@@ -285,7 +287,7 @@
     <div class="mode-row">
       <span id="pill-razorpay" class="pill off">Razorpay: checking…</span>
       <span id="pill-webhook" class="pill off">Webhook: checking…</span>
-      <span id="pill-llm" class="pill off">Claude reasoning: checking…</span>
+      <span id="pill-llm" class="pill off">AI diagnosis: checking…</span>
     </div>
   </div>
   <div class="actions">
@@ -324,6 +326,23 @@
     <h2 class="serif">Recovery funnel</h2>
     <p class="section-sub">No simulated outcome is counted as recovery. Payment is verified only from a valid, deduplicated Razorpay webhook.</p>
     <div id="funnel"></div>
+  </section>
+
+  <section>
+    <h2 class="serif">AI Safety Chaos Lab</h2>
+    <p class="section-sub">Deliberately inject malformed, unsafe, uncertain, opted-out and prompt-injected proposals. The model proposes; deterministic policy decides.</p>
+    <div class="lab-panel">
+      <div class="lab-toolbar">
+        <p id="chaos-meta">Five safety invariants ready to test.</p>
+        <button id="btn-chaos">Inject failures</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Scenario</th><th>Injected failure</th><th>Guard</th><th>Final action</th><th>Invariant</th><th>Result</th></tr></thead>
+          <tbody id="chaos-table-body"><tr><td colspan="6" class="empty">Run the suite to prove unsafe AI output cannot execute.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
   </section>
 
   <section>
@@ -403,7 +422,7 @@ async function refreshHealth(){
   rp.className = 'pill ' + (r.razorpay_live ? 'on' : 'off');
   wp.textContent = 'Webhook: ' + (r.webhook_ready ? 'signature verification ready' : 'secret missing');
   wp.className = 'pill ' + (r.webhook_ready ? 'on' : 'off');
-  lp.textContent = 'Claude reasoning: ' + (r.llm_live ? 'live' : 'rule-based fallback');
+  lp.textContent = 'AI diagnosis: ' + (r.llm_live ? 'Claude live · policy gated' : 'typed deterministic fallback');
   lp.className = 'pill ' + (r.llm_live ? 'on' : 'off');
 }
 
@@ -533,6 +552,33 @@ $('btn-policy-lab').addEventListener('click', async () => {
   }finally{
     button.disabled = false;
     button.textContent = 'Run 1,000-journey comparison';
+  }
+});
+
+$('btn-chaos').addEventListener('click', async () => {
+  const button = $('btn-chaos');
+  button.disabled = true;
+  button.textContent = 'Injecting failures…';
+  try{
+    const result = await fetch('/api/chaos-lab/run', {method:'POST'}).then(r=>r.json());
+    $('chaos-meta').textContent = `${result.passed_count}/${result.total} invariants protected · suite ${result.passed ? 'passed' : 'failed'}`;
+    const body = $('chaos-table-body');
+    body.innerHTML = '';
+    result.scenarios.forEach(s => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${s.scenario.replace(/_/g,' ')}</td>
+        <td>${s.injected_failure}</td>
+        <td>${s.guard_result.replace(/_/g,' ')}</td>
+        <td>${s.final_action.replace(/_/g,' ')}</td>
+        <td>${s.protected_invariant}</td>
+        <td class="${s.passed ? 'chaos-pass' : 'chaos-fail'}">${s.passed ? 'PASS' : 'FAIL'}</td>
+      `;
+      body.appendChild(tr);
+    });
+  }finally{
+    button.disabled = false;
+    button.textContent = 'Inject failures';
   }
 });
 
