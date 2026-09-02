@@ -94,7 +94,6 @@
 
   main{ padding:32px 40px 60px; max-width:1320px; margin:0 auto; }
 
-  /* --- Ledger strip (hero numbers) --- */
   .ledger{
     display:flex;
     border-top:1px solid var(--line);
@@ -121,7 +120,6 @@
   .ledger .value.sage{ color:var(--sage); }
   .ledger .sub{ font-size:0.78rem; color:var(--muted); margin-top:4px; }
 
-  /* --- Funnel --- */
   section{ margin-bottom:40px; }
   section > h2{
     font-family:'Newsreader', serif;
@@ -169,7 +167,6 @@
     color:var(--text);
   }
 
-  /* --- Policy lab --- */
   .lab-panel{ border:1px solid var(--line); border-radius:6px; background:var(--surface); overflow:hidden; }
   .lab-toolbar{ padding:14px 18px; display:flex; justify-content:space-between; align-items:center; gap:12px; border-bottom:1px solid var(--line); }
   .lab-toolbar p{ margin:0; color:var(--muted); font-size:.82rem; }
@@ -181,7 +178,6 @@
   .chaos-pass{ color:var(--sage); }
   .chaos-fail{ color:var(--rust); }
 
-  /* --- Two column: transactions + audit log --- */
   .two-col{
     display:grid;
     grid-template-columns:1.1fr 1fr;
@@ -225,6 +221,8 @@
     vertical-align:top;
   }
   tr:last-child td{ border-bottom:none; }
+  #txn-table tbody tr{ cursor:pointer; }
+  #txn-table tbody tr:hover, #txn-table tbody tr.selected{ background:var(--surface-2); }
   .amt{ font-family:'IBM Plex Mono', monospace; }
   .status-tag{
     font-size:0.72rem;
@@ -261,6 +259,23 @@
   .log-entry .ts{ color:var(--muted); font-size:0.72rem; }
   .log-entry .reasoning{ color:#CFCBBF; }
   .log-entry .src{ color:var(--muted); font-size:0.7rem; margin-top:4px; }
+
+  .detail-panel{ margin-bottom:28px; }
+  .detail-body{ padding:18px; }
+  .detail-grid{ display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:14px; }
+  .detail-item{ border-left:2px solid var(--line); padding-left:10px; min-width:0; }
+  .detail-item .key{ color:var(--muted); font-size:.7rem; text-transform:uppercase; letter-spacing:.06em; }
+  .detail-item .val{ margin-top:3px; font-size:.84rem; overflow-wrap:anywhere; }
+  .detail-actions{ display:flex; align-items:center; gap:12px; margin-top:18px; padding-top:16px; border-top:1px solid var(--line); flex-wrap:wrap; }
+  .pay-link{ display:inline-block; padding:9px 14px; border-radius:4px; background:var(--gold); color:#1A1305; text-decoration:none; font-size:.86rem; font-weight:600; }
+  .evidence{ display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:18px; }
+  .evidence h4{ font-size:.78rem; color:var(--muted); margin:0 0 8px; font-weight:500; }
+  .evidence-list{ border:1px solid var(--line); border-radius:4px; max-height:260px; overflow:auto; }
+  .evidence-row{ padding:9px 11px; border-bottom:1px solid var(--line); font-size:.76rem; }
+  .evidence-row:last-child{ border-bottom:0; }
+  .evidence-row strong{ color:var(--gold); font-family:'IBM Plex Mono', monospace; font-size:.68rem; }
+  .verified{ color:var(--sage); }
+  @media (max-width:850px){ .detail-grid{ grid-template-columns:1fr 1fr; } .evidence{ grid-template-columns:1fr; } }
 
   .empty{
     padding:40px 18px;
@@ -366,6 +381,27 @@
     </div>
   </section>
 
+  <section id="txn-detail" class="panel detail-panel" hidden>
+    <div class="panel-head">
+      <h3>Transaction evidence</h3>
+      <span class="pill" id="detail-id"></span>
+    </div>
+    <div class="detail-body">
+      <div class="detail-grid" id="detail-grid"></div>
+      <div class="detail-actions" id="detail-actions"></div>
+      <div class="evidence">
+        <div>
+          <h4>Decision trail</h4>
+          <div class="evidence-list" id="detail-audit"></div>
+        </div>
+        <div>
+          <h4>Signed webhook evidence</h4>
+          <div class="evidence-list" id="detail-webhooks"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <div class="two-col">
     <div class="panel">
       <div class="panel-head">
@@ -403,6 +439,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const inr = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', {maximumFractionDigits:0});
+let selectedTransactionId = null;
 
 const STAGE_ORDER = [
   ['at_risk', 'At risk', 'var(--gold-dim)'],
@@ -462,14 +499,57 @@ async function refreshTransactions(){
   $('txn-empty').style.display = txns.length ? 'none' : 'block';
   txns.slice(0, 200).forEach(t => {
     const tr = document.createElement('tr');
+    tr.dataset.transactionId = t.id;
+    if(t.id === selectedTransactionId) tr.classList.add('selected');
     tr.innerHTML = `
       <td>${t.customer_name}<br><span style="color:var(--muted); font-size:0.74rem">${t.segment.replace('_',' ')}</span></td>
       <td class="amt">${inr(t.amount)}</td>
       <td>${t.root_cause ? t.root_cause.replace(/_/g,' ') : '—'}</td>
       <td><span class="status-tag ${statusClass(t.status)}">${t.status.replace(/_/g,' ')}</span></td>
     `;
+    tr.addEventListener('click', () => showTransaction(t.id));
     tbody.appendChild(tr);
   });
+}
+
+const safe = value => String(value ?? '—')
+  .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
+
+async function showTransaction(id){
+  const response = await fetch(`/api/transactions/${encodeURIComponent(id)}`);
+  if(!response.ok) return;
+  const detail = await response.json();
+  const t = detail.transaction;
+  selectedTransactionId = id;
+  document.querySelectorAll('#txn-table tbody tr').forEach(row => {
+    row.classList.toggle('selected', row.dataset.transactionId === id);
+  });
+  $('txn-detail').hidden = false;
+  $('detail-id').textContent = t.id;
+  const items = [
+    ['Customer', t.customer_name], ['Amount', inr(t.amount)],
+    ['Status', t.status.replaceAll('_', ' ')], ['Root cause', t.root_cause?.replaceAll('_', ' ') || 'Not diagnosed'],
+    ['Payment method', t.payment_method], ['Contacts', t.contact_count],
+    ['Next action', t.next_action_at ? new Date(t.next_action_at + 'Z').toLocaleString() : 'None'],
+    ['Verified amount', inr(t.verified_recovered_amount)],
+  ];
+  $('detail-grid').innerHTML = items.map(([key, value]) =>
+    `<div class="detail-item"><div class="key">${safe(key)}</div><div class="val">${safe(value)}</div></div>`
+  ).join('');
+
+  const actions = $('detail-actions');
+  actions.innerHTML = t.payment_link
+    ? `<a class="pay-link" href="${safe(t.payment_link)}" target="_blank" rel="noopener">${t.status === 'payment_verified' ? 'View payment link' : 'Complete test payment'}</a><span class="pill">${safe(t.razorpay_payment_link_id || 'mock link')}</span>`
+    : '<span class="pill">No payment link created for this action</span>';
+
+  $('detail-audit').innerHTML = detail.audit_log.length
+    ? detail.audit_log.map(row => `<div class="evidence-row"><strong>${safe(row.stage)}</strong> · ${safe(row.action_taken)}<br>${safe(row.reasoning)}<br><span class="mono">${safe(row.outcome)}</span></div>`).join('')
+    : '<div class="empty">No decisions recorded.</div>';
+  $('detail-webhooks').innerHTML = detail.webhook_events.length
+    ? detail.webhook_events.map(row => `<div class="evidence-row"><strong>${safe(row.event_type)}</strong> · <span class="${row.outcome === 'payment_verified' ? 'verified' : ''}">${safe(row.outcome)}</span><br>signature: ${row.signature_valid ? 'valid' : 'invalid'} · event: ${safe(row.event_id)}${row.error ? `<br>${safe(row.error)}` : ''}</div>`).join('')
+    : '<div class="empty">No Razorpay event matched this transaction yet.</div>';
+  $('txn-detail').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 async function refreshLogs(){

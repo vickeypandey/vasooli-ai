@@ -1,17 +1,3 @@
-"""
-The recovery agent itself: a bounded state machine, not a free-roaming loop.
-
-Pipeline per transaction:
-  DETECTED -> DIAGNOSED -> DECIDED -> ACTED -> (RESOLVED | STOPPED)
-
-Compliance / stopping rules (the part the buildathon rubric explicitly
-grades — "compliant escalation, stopping rules, and an audit trail"):
-  1. customer_opted_out       -> stop immediately, never contacted
-  2. quiet hours (22:00-08:00) -> contact-based actions are deferred, not sent
-  3. MAX_AUTO_RETRIES reached  -> no more silent retries, must involve customer
-  4. MAX_CONTACT_ATTEMPTS reached -> stop nudging, escalate or mark lost
-"""
-
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -79,7 +65,6 @@ def process_transaction(db: Session, txn: Transaction) -> None:
 
     _log(db, txn, "DETECTED", None, None, "At-risk transaction picked up by the agent.", "rule_based", None)
 
-    # --- Compliance stop #1: do-not-contact list ---
     if txn.customer_opted_out:
         txn.status = "stopped"
         _log(
@@ -95,7 +80,6 @@ def process_transaction(db: Session, txn: Transaction) -> None:
     txn.status = "diagnosed"
     _log(db, txn, "DIAGNOSED", diagnosis.root_cause, None, diagnosis.description, "rule_based", None)
 
-    # --- Compliance stop #2: contact budget exhausted ---
     if diagnosis.root_cause != "unknown" and txn.contact_count >= settings.MAX_CONTACT_ATTEMPTS and not diagnosis.is_transient:
         txn.status = "lost"
         _log(
@@ -131,11 +115,10 @@ def process_transaction(db: Session, txn: Transaction) -> None:
         return
     action = _execution_action(guard.final_action, txn)
 
-    # --- Compliance stop #3: quiet hours for anything contact-based ---
     contact_actions = {"payment_link", "discount_nudge"}
     if action in contact_actions and _in_quiet_hours(local_now.hour):
         txn.next_action_at = _next_contact_time(now)
-        txn.status = "diagnosed"  # left pending, will be retried on the next run
+        txn.status = "diagnosed"
         _log(
             db, txn, "DECIDED", diagnosis.root_cause, action,
             f"Chosen action '{action}' deferred — event occurred at hour "
@@ -149,7 +132,6 @@ def process_transaction(db: Session, txn: Transaction) -> None:
     _log(db, txn, "DECIDED", diagnosis.root_cause, action, guard.reason,
          "deterministic_policy_guard", None)
 
-    # --- Execute ---
     txn.last_action_at = now
     txn.next_action_at = None
     txn.status = "action_created"
@@ -159,8 +141,6 @@ def process_transaction(db: Session, txn: Transaction) -> None:
          "rule_based", "action_created")
 
     if action in ("instant_retry", "delayed_retry"):
-        # This prototype does not silently claim that a retry succeeded. A
-        # real charge API executor belongs behind the same idempotency key.
         txn.retry_count += 1
         txn.status = "failed"
         _log(db, txn, "ACTED", diagnosis.root_cause, action,

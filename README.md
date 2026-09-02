@@ -126,6 +126,48 @@ an untrusted gateway log. Run it from the dashboard or:
 Invoke-RestMethod -Method Post "http://localhost:8000/api/chaos-lab/run"
 ```
 
+## Transaction evidence view (Day 4)
+
+Click any row in the Transactions table to open its evidence view. It keeps the
+full demonstration in one place:
+
+- current status, root cause, amount, contact count and next scheduled action;
+- a direct test Payment Link when the action created one;
+- the ordered AI, policy and execution decision trail;
+- matched Razorpay events, signature status, event ID and processing outcome.
+
+This view makes the trust boundary visible. `AI_PROPOSED` is advice,
+`POLICY_*` is authorization, `ACTION_CREATED` is durable intent, and only
+`PAYMENT_VERIFIED` from a signed webhook changes the verified KPI.
+
+## Architecture
+
+```text
+Synthetic at-risk input
+        |
+        v
+Structured diagnosis ---- Claude proposal or typed fallback
+        |                              |
+        +------------------------------+
+                       |
+              deterministic guard
+                       |
+          approve / override / stop
+                       |
+              idempotent action
+                       |
+             Razorpay Payment Link
+                       |
+             signed webhook endpoint
+                       |
+       signature -> dedupe -> correlation
+                       |
+        verified ledger + audit evidence
+```
+
+The Policy Lab and Chaos Lab are evaluation tools. Neither writes recovered
+money into the verified ledger.
+
 ## Configure Razorpay test mode
 
 ```powershell
@@ -182,6 +224,7 @@ against a real Razorpay test Payment Link can produce `payment_verified`.
 | `GET /api/webhook-events` | Inspect verified event outcomes and exceptions |
 | `GET /api/metrics` | Verified KPIs plus isolated simulation values |
 | `GET /api/transactions` | Current recovery state |
+| `GET /api/transactions/{id}` | Transaction, decision trail and matched webhook evidence |
 | `GET /api/audit-log` | Explainable state-transition history |
 
 ## Tests
@@ -190,9 +233,20 @@ against a real Razorpay test Payment Link can produce `payment_verified`.
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-The focused Day 1 tests cover raw-body signature verification, duplicate
-rejection, payment verification, amount-mismatch quarantine, out-of-order
-expiry protection, scheduling, and verified/simulated metric separation.
+The test suite covers raw-body signatures, duplicate rejection, payment
+verification, amount and reference mismatch quarantine, unmatched events,
+out-of-order expiry protection, quiet-hour scheduling, verified/simulated KPI
+separation, policy evaluation, AI guardrails and transaction evidence.
+
+## Five-minute demo order
+
+1. Generate 12 records and run the recovery agent.
+2. Click an `awaiting_payment` row and show `AI_PROPOSED`, `POLICY_*` and
+   `ACTION_CREATED` in its decision trail.
+3. Open its test Payment Link and complete a successful Razorpay test payment.
+4. Refresh, reopen the row and show `PAYMENT_VERIFIED` plus the signed webhook
+   event. Point out that the verified KPI changed only now.
+5. Run the Policy Lab, then the Chaos Lab, and explain what each proves.
 
 ## Security note
 

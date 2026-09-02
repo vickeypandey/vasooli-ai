@@ -31,26 +31,22 @@ class Transaction(Base):
     id = Column(String, primary_key=True, default=gen_id)
     customer_id = Column(String, nullable=False)
     customer_name = Column(String, nullable=False)
-    segment = Column(String, nullable=False)  # high_value | regular | new_customer
+    segment = Column(String, nullable=False)
 
     amount = Column(Float, nullable=False)
-    payment_method = Column(String, nullable=False)  # upi | card | netbanking | wallet
-    failure_type = Column(String, nullable=False)  # payment_failed | checkout_abandoned
-    error_code = Column(String, nullable=True)  # null for checkout_abandoned
-    gateway_log = Column(Text, nullable=True)  # unstructured, untrusted diagnostic evidence
+    payment_method = Column(String, nullable=False)
+    failure_type = Column(String, nullable=False)
+    error_code = Column(String, nullable=True)
+    gateway_log = Column(Text, nullable=True)
 
-    simulated_hour = Column(Integer, nullable=False)  # 0-23, hour-of-day this event occurred
-    customer_opted_out = Column(Boolean, default=False)  # do-not-contact list
+    simulated_hour = Column(Integer, nullable=False)
+    customer_opted_out = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Mutable pipeline state. Recovery is only verified by a signed webhook.
     status = Column(String, default="at_risk")
-    # at_risk -> diagnosed -> action_created -> awaiting_payment
-    # -> payment_verified | expired | failed (or stopped/escalated)
     root_cause = Column(String, nullable=True)
     retry_count = Column(Integer, default=0)
     contact_count = Column(Integer, default=0)
-    # Legacy/simulation-only value. It is never included in verified metrics.
     recovered_amount = Column(Float, nullable=True)
     verified_recovered_amount = Column(Float, nullable=False, default=0.0)
     payment_link = Column(String, nullable=True)
@@ -79,11 +75,10 @@ class AuditLog(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
 
     stage = Column(String, nullable=False)
-    # DETECTED | DIAGNOSED | DECIDED | ACTED | STOPPED | RESOLVED
     root_cause = Column(String, nullable=True)
     action_taken = Column(String, nullable=True)
     reasoning = Column(Text, nullable=True)
-    reasoning_source = Column(String, default="rule_based")  # rule_based | claude
+    reasoning_source = Column(String, default="rule_based")
     outcome = Column(String, nullable=True)
 
     transaction = relationship("Transaction", back_populates="audit_logs")

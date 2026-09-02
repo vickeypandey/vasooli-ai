@@ -141,6 +141,28 @@ class DayOneRecoveryTests(unittest.TestCase):
         self.assertEqual(txn.status, "awaiting_payment")
         self.assertEqual(txn.verified_recovered_amount, 0.0)
 
+    def test_reference_mismatch_is_quarantined(self):
+        txn = self.transaction()
+        payload = self.paid_payload()
+        payload["payload"]["payment_link"]["entity"]["reference_id"] = "another_txn"
+        raw = json.dumps(payload).encode()
+        result = process_verified_event(self.db, "event_bad_reference", raw, payload)
+        self.db.refresh(txn)
+
+        self.assertEqual(result["outcome"], "quarantined_mismatch")
+        self.assertEqual(txn.status, "awaiting_payment")
+        self.assertEqual(txn.verified_recovered_amount, 0.0)
+
+    def test_unmatched_event_is_stored_for_review(self):
+        payload = self.paid_payload()
+        raw = json.dumps(payload).encode()
+        result = process_verified_event(self.db, "event_unmatched", raw, payload)
+        event = self.db.query(WebhookEvent).filter_by(event_id="event_unmatched").one()
+
+        self.assertEqual(result["outcome"], "unmatched")
+        self.assertIsNone(event.transaction_id)
+        self.assertIn("No transaction matched", event.error)
+
     def test_late_expiry_cannot_undo_verified_payment(self):
         txn = self.transaction()
         paid = self.paid_payload()
@@ -273,6 +295,25 @@ class DayOneRecoveryTests(unittest.TestCase):
         self.assertLess(stages.index("AI_PROPOSED"), stages.index("POLICY_APPROVED"))
         self.assertLess(stages.index("POLICY_APPROVED"), stages.index("ACTION_CREATED"))
         self.assertEqual(txn.status, "awaiting_payment")
+
+    def test_transaction_detail_returns_only_matching_evidence(self):
+        txn = self.transaction()
+        self.db.add(AuditLog(
+            transaction_id=txn.id,
+            stage="ACTION_CREATED",
+            reasoning_source="rule_based",
+            outcome="action_created",
+        ))
+        self.db.commit()
+
+        response = TestClient(app).get(f"/api/transactions/{txn.id}")
+        missing = TestClient(app).get("/api/transactions/missing")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["transaction"]["id"], txn.id)
+        self.assertEqual(len(response.json()["audit_log"]), 1)
+        self.assertEqual(response.json()["webhook_events"], [])
+        self.assertEqual(missing.status_code, 404)
 
 
 if __name__ == "__main__":

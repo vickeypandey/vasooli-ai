@@ -32,7 +32,6 @@ def startup():
     init_db()
 
 
-# ---------------------------------------------------------------- helpers --
 def _txn_dict(t: Transaction) -> dict:
     return {
         "id": t.id,
@@ -74,7 +73,6 @@ def _log_dict(l: AuditLog) -> dict:
     }
 
 
-# ------------------------------------------------------------------ API ---
 @app.post("/api/generate-batch")
 def api_generate_batch(n: int = 120, db: Session = Depends(get_db)):
     batch = generate_batch(n=n)
@@ -105,16 +103,45 @@ def api_transactions(db: Session = Depends(get_db)):
     return [_txn_dict(t) for t in txns]
 
 
+@app.get("/api/transactions/{transaction_id}")
+def api_transaction_detail(transaction_id: str, db: Session = Depends(get_db)):
+    txn = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if txn is None:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    logs = (
+        db.query(AuditLog)
+        .filter(AuditLog.transaction_id == transaction_id)
+        .order_by(AuditLog.timestamp.asc(), AuditLog.id.asc())
+        .all()
+    )
+    events = (
+        db.query(WebhookEvent)
+        .filter(WebhookEvent.transaction_id == transaction_id)
+        .order_by(WebhookEvent.received_at.desc())
+        .all()
+    )
+    return {
+        "transaction": _txn_dict(txn),
+        "audit_log": [_log_dict(row) for row in logs],
+        "webhook_events": [_event_dict(row) for row in events],
+    }
+
+
 @app.get("/api/audit-log")
-def api_audit_log(limit: int = 500, db: Session = Depends(get_db)):
-    logs = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(limit).all()
+def api_audit_log(
+    limit: int = Query(500, ge=1, le=1000),
+    transaction_id: str | None = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(AuditLog)
+    if transaction_id:
+        query = query.filter(AuditLog.transaction_id == transaction_id)
+    logs = query.order_by(AuditLog.timestamp.desc()).limit(limit).all()
     return [_log_dict(l) for l in logs]
 
 
-@app.get("/api/webhook-events")
-def api_webhook_events(limit: int = 100, db: Session = Depends(get_db)):
-    events = db.query(WebhookEvent).order_by(WebhookEvent.received_at.desc()).limit(min(limit, 500)).all()
-    return [{
+def _event_dict(e: WebhookEvent) -> dict:
+    return {
         "event_id": e.event_id,
         "event_type": e.event_type,
         "transaction_id": e.transaction_id,
@@ -123,7 +150,13 @@ def api_webhook_events(limit: int = 100, db: Session = Depends(get_db)):
         "outcome": e.outcome,
         "error": e.error,
         "received_at": e.received_at.isoformat() if e.received_at else None,
-    } for e in events]
+    }
+
+
+@app.get("/api/webhook-events")
+def api_webhook_events(limit: int = 100, db: Session = Depends(get_db)):
+    events = db.query(WebhookEvent).order_by(WebhookEvent.received_at.desc()).limit(min(limit, 500)).all()
+    return [_event_dict(e) for e in events]
 
 
 @app.post("/api/chaos-lab/run")
@@ -248,7 +281,6 @@ def health():
     }
 
 
-# ------------------------------------------------------------- dashboard --
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
 
