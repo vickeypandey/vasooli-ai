@@ -14,6 +14,7 @@ from backend.config import settings
 from backend.database import get_db
 from backend.main import api_metrics, app
 from backend.models import Base, Transaction, WebhookEvent
+from backend.policy_lab import run_experiment
 from backend.webhooks import process_verified_event, valid_signature
 
 
@@ -166,6 +167,35 @@ class DayOneRecoveryTests(unittest.TestCase):
         # 18:00 UTC = 23:30 Asia/Kolkata; next 08:00 IST = 02:30 UTC.
         scheduled = _next_contact_time(datetime(2026, 9, 1, 18, 0))
         self.assertEqual(scheduled, datetime(2026, 9, 2, 2, 30))
+
+    def test_policy_lab_is_reproducible_and_separate_from_verified_kpis(self):
+        first = run_experiment(seed=42, n=1000)
+        second = run_experiment(seed=42, n=1000)
+        self.assertEqual(first["policies"], second["policies"])
+        self.assertFalse(first["included_in_verified_kpis"])
+        self.assertEqual(first["batch_size"], 1000)
+
+    def test_contextual_policy_beats_rules_without_compliance_violations(self):
+        result = run_experiment(seed=42, n=1000)
+        policies = {p["policy"]: p for p in result["policies"]}
+        contextual = policies["contextual_policy"]
+        rules = policies["simple_rules"]
+        self.assertEqual(contextual["compliance_violations"], 0)
+        self.assertGreater(contextual["net_recovered_value"], rules["net_recovered_value"])
+        self.assertLess(
+            contextual["unnecessary_contact_rate_pct"],
+            rules["unnecessary_contact_rate_pct"],
+        )
+
+    def test_policy_lab_http_run_is_persisted_as_latest(self):
+        client = TestClient(app)
+        run = client.post("/api/policy-lab/run?seed=77&n=100")
+        latest = client.get("/api/policy-lab/latest")
+        self.assertEqual(run.status_code, 200)
+        self.assertEqual(latest.status_code, 200)
+        self.assertTrue(latest.json()["available"])
+        self.assertEqual(latest.json()["seed"], 77)
+        self.assertEqual(latest.json()["batch_size"], 100)
 
 
 if __name__ == "__main__":

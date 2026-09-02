@@ -65,6 +65,34 @@ action_created -> awaiting_payment -> payment_verified | expired | failed
 Pre-action safety states such as `at_risk`, `diagnosed`, `stopped`, and
 `escalated` remain available so the audit trail explains why no action ran.
 
+## Recovery Policy Lab (Day 2)
+
+The dashboard includes a reproducible counterfactual experiment across 1,000
+seeded synthetic customer journeys. It compares three policies against the
+same potential outcomes:
+
+- `always_retry`: deliberately naive baseline.
+- `simple_rules`: fixed root-cause-to-action mappings with stopping rules.
+- `contextual_policy`: chooses the bounded action with the highest expected net
+  value using root cause, amount and customer segment, while abstaining for
+  opt-outs and escalating unknown diagnoses.
+
+Each run reports gross recovered amount, net recovered value after retry,
+contact, escalation and discount costs, contact volume, unnecessary-contact
+rate, compliance violations, action distribution and regret versus an oracle
+that knows the generated potential outcomes. The contextual policy also emits
+an honest exception list for abstentions and escalations.
+
+This is explicitly a `seeded_counterfactual_simulation`. Its values are stored
+separately and `included_in_verified_kpis` is always false. It never alters the
+signed-webhook recovery ledger.
+
+Run it from the dashboard or with:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8000/api/policy-lab/run?seed=42&n=1000"
+```
+
 ## Configure Razorpay test mode
 
 ```powershell

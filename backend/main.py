@@ -1,6 +1,7 @@
+import json
 from datetime import datetime
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,7 +12,8 @@ from backend.agent import run_agent_on_batch
 from backend.config import settings
 from backend.data_generator import generate_batch
 from backend.database import SessionLocal, get_db, init_db
-from backend.models import AuditLog, Transaction, WebhookEvent
+from backend.models import AuditLog, PolicyExperiment, Transaction, WebhookEvent
+from backend.policy_lab import run_experiment
 from backend.webhooks import parse_json, process_verified_event, valid_signature
 
 app = FastAPI(title="Vasooli AI — Revenue Recovery Agent")
@@ -120,6 +122,38 @@ def api_webhook_events(limit: int = 100, db: Session = Depends(get_db)):
         "error": e.error,
         "received_at": e.received_at.isoformat() if e.received_at else None,
     } for e in events]
+
+
+@app.post("/api/policy-lab/run")
+def api_run_policy_lab(
+    seed: int = Query(42, ge=0, le=2_147_483_647),
+    n: int = Query(1000, ge=50, le=10_000),
+    db: Session = Depends(get_db),
+):
+    result = run_experiment(seed=seed, n=n)
+    experiment = PolicyExperiment(
+        seed=seed,
+        batch_size=n,
+        result_json=json.dumps(result, separators=(",", ":")),
+    )
+    db.add(experiment)
+    db.commit()
+    db.refresh(experiment)
+    result["experiment_id"] = experiment.id
+    result["created_at"] = experiment.created_at.isoformat()
+    return result
+
+
+@app.get("/api/policy-lab/latest")
+def api_latest_policy_lab(db: Session = Depends(get_db)):
+    experiment = db.query(PolicyExperiment).order_by(PolicyExperiment.created_at.desc()).first()
+    if experiment is None:
+        return {"available": False}
+    result = json.loads(experiment.result_json)
+    result["available"] = True
+    result["experiment_id"] = experiment.id
+    result["created_at"] = experiment.created_at.isoformat()
+    return result
 
 
 @app.post("/api/webhooks/razorpay")

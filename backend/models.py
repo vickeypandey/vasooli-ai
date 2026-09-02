@@ -105,3 +105,15 @@ class WebhookEvent(Base):
     outcome = Column(String, nullable=False, default="received")
     error = Column(Text, nullable=True)
     raw_payload = Column(Text, nullable=False)
+
+
+class PolicyExperiment(Base):
+    """Persisted, reproducible simulation output; never a verified-money row."""
+
+    __tablename__ = "policy_experiments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    seed = Column(Integer, nullable=False)
+    batch_size = Column(Integer, nullable=False)
+    result_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

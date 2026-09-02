@@ -169,6 +169,16 @@
     color:var(--text);
   }
 
+  /* --- Policy lab --- */
+  .lab-panel{ border:1px solid var(--line); border-radius:6px; background:var(--surface); overflow:hidden; }
+  .lab-toolbar{ padding:14px 18px; display:flex; justify-content:space-between; align-items:center; gap:12px; border-bottom:1px solid var(--line); }
+  .lab-toolbar p{ margin:0; color:var(--muted); font-size:.82rem; }
+  .lab-table td:first-child{ font-weight:600; }
+  .lab-table .best{ color:var(--sage); }
+  .lab-table .warn{ color:var(--rust); }
+  .lab-foot{ padding:12px 18px; border-top:1px solid var(--line); color:var(--muted); font-size:.78rem; }
+  .exception-list{ margin:8px 0 0; padding-left:18px; max-height:110px; overflow:auto; }
+
   /* --- Two column: transactions + audit log --- */
   .two-col{
     display:grid;
@@ -280,7 +290,7 @@
   </div>
   <div class="actions">
     <button id="btn-reset">Reset</button>
-    <button id="btn-generate">Generate batch</button>
+    <button id="btn-generate">Generate 12 test records</button>
     <button id="btn-run" class="primary">Run recovery agent</button>
   </div>
 </header>
@@ -314,6 +324,27 @@
     <h2 class="serif">Recovery funnel</h2>
     <p class="section-sub">No simulated outcome is counted as recovery. Payment is verified only from a valid, deduplicated Razorpay webhook.</p>
     <div id="funnel"></div>
+  </section>
+
+  <section>
+    <h2 class="serif">Recovery Policy Lab</h2>
+    <p class="section-sub">Seeded counterfactual simulation only. Every policy sees the same potential outcomes; none of these rupees enter verified recovery KPIs.</p>
+    <div class="lab-panel">
+      <div class="lab-toolbar">
+        <p id="lab-meta">No experiment run yet.</p>
+        <button id="btn-policy-lab">Run 1,000-journey comparison</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="lab-table">
+          <thead><tr><th>Policy</th><th>Recovered</th><th>Net value</th><th>Contacts</th><th>Unnecessary</th><th>Violations</th><th>Oracle regret</th></tr></thead>
+          <tbody id="policy-table-body"><tr><td colspan="7" class="empty">Run the lab to compare policies.</td></tr></tbody>
+        </table>
+      </div>
+      <div class="lab-foot">
+        <span id="lab-ground-truth">Results are reproducible by seed and explicitly isolated from real payment evidence.</span>
+        <ul class="exception-list" id="lab-exceptions"></ul>
+      </div>
+    </div>
   </section>
 
   <div class="two-col">
@@ -447,13 +478,67 @@ async function refreshLogs(){
   });
 }
 
-async function refreshAll(){
-  await Promise.all([refreshMetrics(), refreshTransactions(), refreshLogs()]);
+const POLICY_LABELS = {
+  always_retry: 'Always retry (baseline)',
+  simple_rules: 'Simple rules',
+  contextual_policy: 'Contextual bounded policy',
+};
+
+function renderPolicyLab(result){
+  if(!result || result.available === false) return;
+  $('lab-meta').textContent = `Seed ${result.seed} · ${result.batch_size.toLocaleString('en-IN')} journeys · ${result.elapsed_ms} ms · excluded from verified KPIs`;
+  $('lab-ground-truth').textContent = result.ground_truth;
+  const body = $('policy-table-body');
+  body.innerHTML = '';
+  const bestNet = Math.max(...result.policies.map(p => p.net_recovered_value));
+  result.policies.forEach(p => {
+    const tr = document.createElement('tr');
+    const isBest = p.net_recovered_value === bestNet;
+    tr.innerHTML = `
+      <td class="${isBest ? 'best' : ''}">${POLICY_LABELS[p.policy] || p.policy}</td>
+      <td class="amt">${inr(p.recovered_amount)}</td>
+      <td class="amt ${isBest ? 'best' : ''}">${inr(p.net_recovered_value)}</td>
+      <td>${p.contacts}</td>
+      <td>${p.unnecessary_contact_rate_pct}%</td>
+      <td class="${p.compliance_violations ? 'warn' : 'best'}">${p.compliance_violations}</td>
+      <td class="amt">${inr(p.average_oracle_regret)}</td>
+    `;
+    body.appendChild(tr);
+  });
+  const exceptions = $('lab-exceptions');
+  exceptions.innerHTML = '';
+  (result.contextual_exceptions || []).slice(0, 6).forEach(e => {
+    const li = document.createElement('li');
+    li.textContent = `${e.journey_id}: ${e.root_cause.replace(/_/g,' ')} → ${e.action.replace(/_/g,' ')} (${e.reason})`;
+    exceptions.appendChild(li);
+  });
 }
+
+async function refreshPolicyLab(){
+  const result = await fetch('/api/policy-lab/latest').then(r=>r.json());
+  renderPolicyLab(result);
+}
+
+async function refreshAll(){
+  await Promise.all([refreshMetrics(), refreshTransactions(), refreshLogs(), refreshPolicyLab()]);
+}
+
+$('btn-policy-lab').addEventListener('click', async () => {
+  const button = $('btn-policy-lab');
+  button.disabled = true;
+  button.textContent = 'Running deterministic comparison…';
+  try{
+    const result = await fetch('/api/policy-lab/run?seed=42&n=1000', {method:'POST'}).then(r=>r.json());
+    renderPolicyLab(result);
+  }finally{
+    button.disabled = false;
+    button.textContent = 'Run 1,000-journey comparison';
+  }
+});
 
 $('btn-generate').addEventListener('click', async () => {
   $('btn-generate').disabled = true;
-  await fetch('/api/generate-batch?n=120', {method:'POST'});
+  await fetch('/api/generate-batch?n=12', {method:'POST'});
   await refreshAll();
   $('btn-generate').disabled = false;
 });
