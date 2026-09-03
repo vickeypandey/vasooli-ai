@@ -119,10 +119,10 @@ error_code: {error_code or 'none'}
     body = json.dumps({
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
-            "temperature": 0,
             "maxOutputTokens": 350,
             "responseMimeType": "application/json",
             "responseSchema": DIAGNOSIS_SCHEMA,
+            "thinkingConfig": {"thinkingLevel": "minimal"},
         },
     }).encode("utf-8")
     request = Request(
@@ -135,7 +135,7 @@ error_code: {error_code or 'none'}
         },
         method="POST",
     )
-    with urlopen(request, timeout=12) as response:
+    with urlopen(request, timeout=30) as response:
         payload = json.loads(response.read().decode("utf-8"))
     parts = payload["candidates"][0]["content"]["parts"]
     raw = "".join(part.get("text", "") for part in parts)
