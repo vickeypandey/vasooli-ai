@@ -3,7 +3,9 @@ import hmac
 import json
 import unittest
 from datetime import datetime
+from io import BytesIO
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -297,6 +299,26 @@ class DayOneRecoveryTests(unittest.TestCase):
             self.assertIn("llm_unavailable", reason)
         finally:
             settings.GEMINI_API_KEY = old_key
+
+    def test_gemini_http_error_is_safe_and_specific(self):
+        old_key = settings.GEMINI_API_KEY
+        settings.GEMINI_API_KEY = "test-key"
+        error = HTTPError(
+            url="https://generativelanguage.googleapis.com/",
+            code=429,
+            msg="Too Many Requests",
+            hdrs=None,
+            fp=BytesIO(b'{"error":{"status":"RESOURCE_EXHAUSTED"}}'),
+        )
+        try:
+            with patch("backend.ai_diagnosis._gemini_proposal", side_effect=error):
+                _, source, reason = propose_diagnosis(
+                    "payment_failed", "CARD_EXPIRED", "expired card"
+                )
+        finally:
+            settings.GEMINI_API_KEY = old_key
+        self.assertEqual(source, "deterministic_fallback")
+        self.assertEqual(reason, "gemini_http_429:RESOURCE_EXHAUSTED")
 
     def test_chaos_suite_protects_all_five_invariants(self):
         result = run_chaos_suite()

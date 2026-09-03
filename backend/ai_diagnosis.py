@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from typing import Literal
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -149,6 +150,15 @@ def propose_diagnosis(
         return deterministic_proposal(failure_type, error_code, gateway_log), "deterministic_fallback", "llm_not_configured"
     try:
         return _gemini_proposal(failure_type, error_code, gateway_log), "gemini", None
+    except HTTPError as exc:
+        status = "UNKNOWN"
+        try:
+            error_body = json.loads(exc.read().decode("utf-8"))
+            status = str(error_body.get("error", {}).get("status", status))
+        except Exception:
+            pass
+        fallback = deterministic_proposal(failure_type, error_code, gateway_log)
+        return fallback, "deterministic_fallback", f"gemini_http_{exc.code}:{status}"
     except (ValidationError, ValueError, TypeError, json.JSONDecodeError) as exc:
         fallback = deterministic_proposal(failure_type, error_code, gateway_log)
         return fallback, "deterministic_fallback", f"invalid_llm_output:{type(exc).__name__}"
