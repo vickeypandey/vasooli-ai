@@ -9,7 +9,7 @@ class Settings:
     RAZORPAY_KEY_SECRET: str | None = os.getenv("RAZORPAY_KEY_SECRET") or None
     RAZORPAY_WEBHOOK_SECRET: str | None = os.getenv("RAZORPAY_WEBHOOK_SECRET") or None
     GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY") or None
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
     MAX_AUTO_RETRIES: int = int(os.getenv("MAX_AUTO_RETRIES", 3))
     MAX_CONTACT_ATTEMPTS: int = int(os.getenv("MAX_CONTACT_ATTEMPTS", 2))

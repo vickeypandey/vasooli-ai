@@ -206,7 +206,7 @@ environment variable:
 
 ```dotenv
 GEMINI_API_KEY=your_key
-GEMINI_MODEL=gemini-2.5-flash-lite
+GEMINI_MODEL=gemini-3.6-flash
 ```
 
 When the key is absent, unavailable or returns invalid output, Vasooli uses the
