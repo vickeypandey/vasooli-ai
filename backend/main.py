@@ -280,6 +280,7 @@ def health():
         "webhook_ready": settings.webhook_ready,
         "llm_live": settings.llm_live,
         "llm_provider": settings.llm_provider,
+        "gemini_model": settings.GEMINI_MODEL,
     }
 
 

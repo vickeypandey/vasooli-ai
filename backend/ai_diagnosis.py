@@ -152,13 +152,20 @@ def propose_diagnosis(
         return _gemini_proposal(failure_type, error_code, gateway_log), "gemini", None
     except HTTPError as exc:
         status = "UNKNOWN"
+        message = "request_rejected"
         try:
             error_body = json.loads(exc.read().decode("utf-8"))
             status = str(error_body.get("error", {}).get("status", status))
+            message = str(error_body.get("error", {}).get("message", message))
+            message = re.sub(r"[^a-zA-Z0-9 ._:/-]", "", message)[:240]
         except Exception:
             pass
         fallback = deterministic_proposal(failure_type, error_code, gateway_log)
-        return fallback, "deterministic_fallback", f"gemini_http_{exc.code}:{status}"
+        return (
+            fallback,
+            "deterministic_fallback",
+            f"gemini_http_{exc.code}:{status}:{message}",
+        )
     except (ValidationError, ValueError, TypeError, json.JSONDecodeError) as exc:
         fallback = deterministic_proposal(failure_type, error_code, gateway_log)
         return fallback, "deterministic_fallback", f"invalid_llm_output:{type(exc).__name__}"

@@ -318,7 +318,10 @@ class DayOneRecoveryTests(unittest.TestCase):
         finally:
             settings.GEMINI_API_KEY = old_key
         self.assertEqual(source, "deterministic_fallback")
-        self.assertEqual(reason, "gemini_http_429:RESOURCE_EXHAUSTED")
+        self.assertEqual(
+            reason,
+            "gemini_http_429:RESOURCE_EXHAUSTED:request_rejected",
+        )
 
     def test_chaos_suite_protects_all_five_invariants(self):
         result = run_chaos_suite()
